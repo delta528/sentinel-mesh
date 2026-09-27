@@ -1,0 +1,6 @@
+# Ignore local environment variables & secrets
+node_config.env
+.env
+
+# Ignore node modules
+node_modules/
