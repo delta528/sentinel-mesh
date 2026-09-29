@@ -3,8 +3,13 @@ name: SentinelMesh CI/CD Pipeline
 on:
   push:
     branches: [ "main", "master" ]
+    tags: [ 'v*.*.*' ]
   pull_request:
     branches: [ "main", "master" ]
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   lint-and-validate:
@@ -62,8 +67,8 @@ jobs:
           node test_client.js
           kill $SERVER_PID
 
-  docker-build-verify:
-    name: Docker Multi-Stage Build & Verification
+  docker-build-verify-publish:
+    name: Docker Build, Health Check & Publish
     needs: integration-tests
     runs-on: ubuntu-latest
 
@@ -71,21 +76,38 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Extract Metadata (Tags, Labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker Image
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build Docker Image (Local Verification)
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile
           push: false
           load: true
-          tags: sentinel-mesh:latest
+          tags: sentinel-mesh:local-test
 
       - name: Verify Container Deployment & Health Endpoint
         run: |
-          docker run -d --name sentinel-node -p 3000:3000 -e TELEMETRY_SECRET="sentinel-mesh-secret-key-2026" sentinel-mesh:latest
+          docker run -d --name sentinel-node -p 3000:3000 -e TELEMETRY_SECRET="sentinel-mesh-secret-key-2026" sentinel-mesh:local-test
           sleep 3
           HEALTH_CHECK=$(curl -s http://localhost:3000/health)
           echo "Container Healthcheck Output: $HEALTH_CHECK"
@@ -97,3 +119,13 @@ jobs:
             docker logs sentinel-node
             exit 1
           fi
+
+      - name: Push Container Image to GHCR
+        if: github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
