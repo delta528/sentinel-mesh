@@ -80,6 +80,7 @@ jobs:
           context: .
           file: ./Dockerfile
           push: false
+          load: true
           tags: sentinel-mesh:latest
 
       - name: Verify Container Deployment & Health Endpoint
