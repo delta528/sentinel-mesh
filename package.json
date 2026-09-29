@@ -2,7 +2,7 @@
   "name": "sentinel-mesh",
   "version": "1.0.0",
   "description": "SentinelMesh is a real-time, zero-trust telemetry processing platform designed to ingest, cryptographically verify, and visualize high-frequency edge device data.",
-  "main": "index.js",
+  "main": "src/server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
